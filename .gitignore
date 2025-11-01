@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+*.sqlite3
+*.db
+
+# Data, models, secrets
+*.h5
+*.pth
+*.pt
+*.ckpt
+data/
+datasets/
+models/
+*.npz
+
+# System / IDE
+.vscode/
+.DS_Store
+.env
+*.log
+
+# Large files
+*.mp4
+*.avi
