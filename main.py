@@ -5,22 +5,31 @@ from tkinter import messagebox
 from deepface import DeepFace
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
 from database_util import init_db, insert_patient, get_patient_by_name
+from s3_util import upload_face_to_s3, download_all_faces, is_s3_configured
 
 # Initialize folders and DB
 DATA_DIR = "data/registered_faces"
 os.makedirs(DATA_DIR, exist_ok=True)
 init_db()
 
+# If AWS credentials aren't set, the app still works fully offline
+# using only the local folder -- important for a safe live demo.
+S3_ENABLED = is_s3_configured()
+if S3_ENABLED:
+    print("[Startup] AWS credentials found — S3 sync is ON.")
+else:
+    print("[Startup] No AWS credentials found — running in local-only mode.")
+
+
 # ---- PDF Generation ----
 def generate_pdf(patient):
     patient_id, name, age, gender, doctor, bp, history, face_path = patient
     pdf_path = f"data/{name}_report.pdf"
-
     c = canvas.Canvas(pdf_path, pagesize=letter)
     c.setFont("Helvetica-Bold", 20)
     c.drawString(200, 750, "Patient Report")
-
     c.setFont("Helvetica", 12)
     c.drawString(100, 700, f"Name: {name}")
     c.drawString(100, 680, f"Age: {age}")
@@ -29,10 +38,10 @@ def generate_pdf(patient):
     c.drawString(100, 620, f"Blood Pressure: {bp}")
     c.drawString(100, 600, f"Medical History: {history}")
     c.drawString(100, 560, f"Face Path: {face_path}")
-
     c.showPage()
     c.save()
     messagebox.showinfo("PDF Generated", f"Report saved: {pdf_path}")
+
 
 # ---- Face Capture ----
 def capture_face():
@@ -63,15 +72,31 @@ def capture_face():
         elif k % 256 == 32:  # SPACE
             face_path = os.path.join(DATA_DIR, f"{name}.jpg")
             cv2.imwrite(face_path, frame)
-            insert_patient(name, age, gender, doctor, bp, history, face_path)
+
+            # Upload to S3 if configured; store the S3 key as the
+            # reference path, otherwise fall back to the local path.
+            stored_path = face_path
+            if S3_ENABLED:
+                s3_key = f"registered_faces/{name}.jpg"
+                result = upload_face_to_s3(face_path, s3_key)
+                if result:
+                    stored_path = s3_key
+
+            insert_patient(name, age, gender, doctor, bp, history, stored_path)
             messagebox.showinfo("Success", f"Face captured and {name} registered successfully!")
             break
 
     cam.release()
     cv2.destroyAllWindows()
 
+
 # ---- Face Recognition ----
 def recognize_face():
+    # Refresh local cache from S3 first (if enabled) so recognition
+    # compares against the latest registered faces.
+    if S3_ENABLED:
+        download_all_faces(DATA_DIR)
+
     cam = cv2.VideoCapture(0)
     cv2.namedWindow("Recognize Face - Press SPACE to scan / ESC to exit")
 
@@ -88,14 +113,12 @@ def recognize_face():
         elif k % 256 == 32:
             temp_path = "temp.jpg"
             cv2.imwrite(temp_path, frame)
-
             try:
                 result = DeepFace.find(img_path=temp_path, db_path=DATA_DIR, model_name="VGG-Face")
                 if len(result[0]) > 0:
                     matched_face_path = result[0].iloc[0]['identity']
                     recognized_name = os.path.splitext(os.path.basename(matched_face_path))[0]
                     patient = get_patient_by_name(recognized_name)
-
                     if patient:
                         messagebox.showinfo("Recognized", f"Patient record found for {recognized_name}")
                         generate_pdf(patient)
@@ -110,13 +133,15 @@ def recognize_face():
     cam.release()
     cv2.destroyAllWindows()
 
+
 # ---- Quit Program ----
 def quit_app():
     root.destroy()
 
+
 # ---- Tkinter GUI ----
 root = Tk()
-root.title("Face ID Medical System")
+root.title("Face ID Medical System" + (" (Cloud)" if S3_ENABLED else " (Local mode)"))
 root.geometry("500x550")
 
 Label(root, text="Face ID Medical System", font=("Helvetica", 16, "bold")).pack(pady=10)
