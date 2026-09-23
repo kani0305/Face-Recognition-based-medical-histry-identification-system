@@ -16,31 +16,11 @@ pip install opencv-python deepface reportlab cryptography boto3
    - Mac/Linux: `export AWS_ACCESS_KEY_ID="..."` and `export AWS_SECRET_ACCESS_KEY="..."`
 5. Open `s3_util.py` and set `BUCKET_NAME` and `REGION` to match your bucket.
 
-## Important: this app now works with or without AWS
-- If AWS credentials are found → it uploads/downloads face images to/from S3
-  automatically, and the window title shows "(Cloud)".
-- If no AWS credentials are found → it silently runs in local-only mode
-  (same as before), and the window title shows "(Local mode)".
-
-This was added on purpose for **interview demo safety**: if AWS access
-keys expire or there's no internet during a live demo, the app still
-runs and recognizes faces correctly from the local cache — it just
-won't sync to S3. You can point this out to an interviewer as a
-deliberate fallback design decision.
 
 ## Run it
 ```
 python main.py
 ```
 
-## Before an online interview — checklist
-1. Run the full flow (register → recognize → PDF) on the SAME machine
-   you'll use for the call, at least once the day before.
-2. Pre-register 2-3 test patients so you don't waste interview time
-   filling the form live.
-3. Test running this app WHILE your video call software is open, to
-   check the webcam isn't already locked by Zoom/Meet.
-4. Record a short screen capture of it working end-to-end as a backup,
-   in case live webcam access fails on the call.
-5. Check your AWS keys/bucket still exist close to the interview date
+e
    (free-tier resources can expire).
